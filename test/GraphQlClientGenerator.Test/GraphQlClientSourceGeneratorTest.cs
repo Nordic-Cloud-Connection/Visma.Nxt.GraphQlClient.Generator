@@ -38,27 +38,28 @@ public class GraphQlClientSourceGeneratorTest : IDisposable
     }
 
     [Theory]
-    [InlineData("GraphQlClientGenerator.DefaultScalarFieldTypeMappingProvider, GraphQlClientGenerator", false, "SourceGeneratorResult")]
-    [InlineData(null, true, "SourceGeneratorResultWithFileScopedNamespaces")]
-    public void SourceGeneration(string scalarFieldTypeMappingProviderTypeName, bool useFileScopedNamespace, string expectedResultResourceName)
+    [InlineData("GraphQlClientGenerator.DefaultScalarFieldTypeMappingProvider, GraphQlClientGenerator", false)]
+    [InlineData(null, true)]
+    public Task SourceGeneration(string scalarFieldTypeMappingProviderTypeName, bool useFileScopedNamespace)
     {
         var generatedSource = GenerateSource(SetupGeneratorOptions(OutputType.SingleFile, useFileScopedNamespace, scalarFieldTypeMappingProviderTypeName), null);
 
         generatedSource.Encoding.ShouldBe(Encoding.UTF8);
         var sourceCode = generatedSource.ToString();
-
-        var expectedSourceCode = GetExpectedSourceText(expectedResultResourceName);
-        sourceCode.ShouldBe(expectedSourceCode);
+        return Verify(sourceCode).UseParameters(useFileScopedNamespace);
     }
 
     [Fact]
-    public void SourceGenerationWithRegexCustomScalarFieldTypeMappingProvider()
+    public Task SourceGenerationWithRegexCustomScalarFieldTypeMappingProvider()
     {
-        var generatedSource = GenerateSource(SetupGeneratorOptions(OutputType.SingleFile, false, null), _fileMappingRules);
+        var options = SetupGeneratorOptions(OutputType.SingleFile, false, null);
+        options.Add("build_property.GraphQlClientGenerator_DataClassMemberNullability", nameof(DataClassMemberNullability.DefinedBySchema));
+        options.Add("build_property.GraphQlClientGenerator_GenerationOrder", nameof(GenerationOrder.Alphabetical));
+
+        var generatedSource = GenerateSource(options, _fileMappingRules);
         var sourceCode = generatedSource.ToString();
 
-        var expectedSourceCode = GetExpectedSourceText("SourceGeneratorResult").Replace("typeof(DateTimeOffset)", "typeof(DateTime)").Replace("DateTimeOffset?", "DateTime?");
-        sourceCode.ShouldBe(expectedSourceCode);
+        return Verify(sourceCode);
     }
 
     [Fact]
@@ -68,13 +69,7 @@ public class GraphQlClientSourceGeneratorTest : IDisposable
         result.GeneratedSources.Length.ShouldBe(70);
         var fileSizes = result.GeneratedSources.Where(s => s.HintName != "BaseClasses.cs").Select(s => s.SourceText.ToString().ReplaceLineEndings().Length).ToArray();
         fileSizes.ShouldBe(
-            [3550, 744, 578, 791, 1404, 485, 620, 926, 642, 659, 1505, 3110, 11684, 3742, 4952, 1481, 4167, 3842, 3927, 2899, 2653, 6104, 4392, 1700, 2623, 5018, 4797, 1730, 2602, 4551, 3904, 1719, 1214, 4294, 1939, 1682, 1921, 9664, 1924, 5903, 2053, 643, 1374, 4359, 1557, 2584, 853, 2373, 1892, 1398, 1765, 943, 2586, 703, 840, 938, 3168, 2098, 704, 934, 2927, 1743, 702, 684, 1234, 812, 725, 705, 6927]);
-    }
-
-    private static string GetExpectedSourceText(string expectedResultsFile)
-    {
-        using var reader = new StreamReader(typeof(GraphQlGeneratorTest).Assembly.GetManifestResourceStream($"GraphQlClientGenerator.Test.ExpectedSingleFileGenerationContext.{expectedResultsFile}"));
-        return reader.ReadToEnd();
+            [3580, 744, 578, 791, 1404, 485, 620, 926, 642, 659, 1505, 3110, 11682, 3742, 4952, 1481, 4167, 3842, 3926, 2899, 2653, 6104, 4392, 1700, 2623, 5018, 4797, 1730, 2602, 4551, 3904, 1719, 1214, 4294, 1939, 1682, 1921, 9664, 1924, 5903, 2053, 643, 1374, 4359, 1557, 2584, 853, 2373, 1892, 1398, 1765, 943, 2586, 703, 840, 938, 3168, 2098, 704, 934, 2927, 1743, 702, 684, 1234, 812, 725, 705, 6927]);
     }
 
     private static Dictionary<string, string> SetupGeneratorOptions(OutputType outputType, bool useFileScopedNamespaces, string scalarFieldTypeMappingProviderTypeName)
@@ -85,7 +80,7 @@ public class GraphQlClientSourceGeneratorTest : IDisposable
                 { "build_property.GraphQlClientGenerator_ClassPrefix", "SourceGenerated" },
                 { "build_property.GraphQlClientGenerator_ClassSuffix", "V2" },
                 { "build_property.GraphQlClientGenerator_IncludeDeprecatedFields", "true" },
-                { "build_property.GraphQlClientGenerator_CommentGeneration", nameof(CommentGenerationOption.CodeSummary) },
+                { "build_property.GraphQlClientGenerator_CodeDocumentationType", nameof(CodeDocumentationType.XmlSummary) },
                 { "build_property.GraphQlClientGenerator_FloatTypeMapping", nameof(FloatTypeMapping.Double) },
                 { "build_property.GraphQlClientGenerator_BooleanTypeMapping", nameof(BooleanTypeMapping.Boolean) },
                 { "build_property.GraphQlClientGenerator_IdTypeMapping", nameof(IdTypeMapping.String) },
@@ -125,42 +120,34 @@ public class GraphQlClientSourceGeneratorTest : IDisposable
             additionalFiles.Add(additionalFile);
 
         var sourceGenerator = new GraphQlClientSourceGenerator();
-        var driver = CSharpGeneratorDriver.Create(new[] { sourceGenerator }, additionalFiles, optionsProvider: compilerAnalyzerConfigOptionsProvider);
+        var driver = CSharpGeneratorDriver.Create([sourceGenerator], additionalFiles, optionsProvider: compilerAnalyzerConfigOptionsProvider);
         var csharpDriver = driver.RunGenerators(compilation);
         var runResult = csharpDriver.GetRunResult();
         runResult.Results.Length.ShouldBe(1);
         return runResult.Results[0];
     }
 
-    private class AdditionalFile : AdditionalText
+    private class AdditionalFile(string path) : AdditionalText
     {
-        public AdditionalFile(string path) => Path = path;
-
         public override SourceText GetText(CancellationToken cancellationToken = default) =>
-            SourceText.From(File.ReadAllText(Path));
+            SourceText.From(File.ReadAllText(Path), Encoding.UTF8);
 
-        public override string Path { get; }
+        public override string Path { get; } = path;
     }
 
-    private class CompilerAnalyzerConfigOptionsProvider : AnalyzerConfigOptionsProvider
+    private class CompilerAnalyzerConfigOptionsProvider(AnalyzerConfigOptions globalOptions) : AnalyzerConfigOptionsProvider
     {
-        private static readonly CompilerAnalyzerConfigOptions DummyOptions = new(new Dictionary<string, string>());
+        private static readonly CompilerAnalyzerConfigOptions DummyOptions = new([]);
 
-        public CompilerAnalyzerConfigOptionsProvider(AnalyzerConfigOptions globalOptions) => GlobalOptions = globalOptions;
-
-        public override AnalyzerConfigOptions GlobalOptions { get; }
+        public override AnalyzerConfigOptions GlobalOptions { get; } = globalOptions;
 
         public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => DummyOptions;
 
         public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => DummyOptions;
     }
 
-    private class CompilerAnalyzerConfigOptions : AnalyzerConfigOptions
+    private class CompilerAnalyzerConfigOptions(Dictionary<string, string> options) : AnalyzerConfigOptions
     {
-        private readonly Dictionary<string, string> _options;
-
-        public CompilerAnalyzerConfigOptions(Dictionary<string, string> options) => _options = options;
-
-        public override bool TryGetValue(string key, out string value) => _options.TryGetValue(key, out value);
+        public override bool TryGetValue(string key, out string value) => options.TryGetValue(key, out value);
     }
 }

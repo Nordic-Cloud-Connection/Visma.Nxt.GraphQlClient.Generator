@@ -11,59 +11,63 @@ public enum GeneratedObjectType
 
 public abstract class GenerationContext
 {
-    private readonly HashSet<string> _referencedObjectTypes = new();
-    private readonly Dictionary<string, string> _nameCollisionMapping = new();
+    private readonly HashSet<string> _referencedObjectTypes = [];
+    private readonly Dictionary<string, GraphQlDirective> _directives = [];
+    private readonly Dictionary<string, string> _nameCollisionMapping = [];
+    private readonly HashSet<(string GraphQlTypeName, string FieldName)> _typeFieldCovarianceRequired = [];
     private GraphQlGeneratorConfiguration _configuration;
     private IReadOnlyDictionary<string, GraphQlType> _complexTypes;
+    private ILookup<string, string> _typeUnionMembership;
 
     protected GraphQlGeneratorConfiguration Configuration =>
-        _configuration ?? throw new InvalidOperationException($"{nameof(Configuration)} not initialized; call \"{nameof(Initialize)}\" method first. ");
+        _configuration ?? throw NotInitializedException(nameof(Configuration));
+
+    protected internal abstract TextWriter Writer { get; }
 
     internal IReadOnlyCollection<string> ReferencedObjectTypes => _referencedObjectTypes;
+
+    internal IReadOnlyCollection<GraphQlDirective> Directives => _directives.Values;
+
+    internal ILookup<string, string> TypeUnionMembership =>
+        _typeUnionMembership ?? throw NotInitializedException(nameof(TypeUnionMembership));
+
+    public virtual byte IndentationSize => 0;
 
     public GraphQlSchema Schema { get; }
 
     public GeneratedObjectType ObjectTypes { get; }
 
-    public virtual byte Indentation { get; }
-
-    protected internal abstract TextWriter Writer { get; }
+    public Action<string> LogMessage { private get; set; }
 
     protected GenerationContext(GraphQlSchema schema, GeneratedObjectType objectTypes)
     {
         var optionsInteger = (int)objectTypes;
         if (optionsInteger is < 1 or > 7)
-            throw new ArgumentException("invalid value", nameof(objectTypes));
+            throw new ArgumentOutOfRangeException(nameof(objectTypes), objectTypes, "invalid value");
 
         Schema = schema ?? throw new ArgumentNullException(nameof(schema));
         ObjectTypes = objectTypes;
     }
 
-    public bool FilterIfDeprecated(GraphQlEnumValue field) => !field.IsDeprecated || Configuration.IncludeDeprecatedFields;
-
-    private bool FilterIfAllFieldsDeprecated(GraphQlField field)
+    protected internal void Initialize(GraphQlGeneratorConfiguration configuration)
     {
-        var fieldType = GraphQlGenerator.UnwrapIfNotNullOrList(field.Type);
-        if (!fieldType.Kind.IsComplex())
-            return true;
-
-        var graphQlType = _complexTypes[fieldType.Name];
-        var nestedTypeFields =
-            graphQlType.Kind is GraphQlTypeKind.Union
-                ? graphQlType.PossibleTypes.Select(t => _complexTypes[t.Name]).SelectMany(t => t.Fields)
-                : graphQlType.Fields;
-
-        return nestedTypeFields.Any(FilterIfDeprecated);
-    }
-
-    public void Initialize(GraphQlGeneratorConfiguration configuration)
-    {
-        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        _directives.Clear();
         _nameCollisionMapping.Clear();
         _referencedObjectTypes.Clear();
+        _typeFieldCovarianceRequired.Clear();
         _complexTypes = Schema.GetComplexTypes().ToDictionary(t => t.Name);
-        ResolverReferencedObjectTypes();
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+
+        ResolveDirectives();
+        ResolveTypeUnionLookup();
+        ResolveReferencedObjectTypes();
         ResolveNameCollisions();
+        ResolveCovarianceRequiredFields();
+        Initialize();
+    }
+
+    protected virtual void Initialize()
+    {
     }
 
     public abstract void BeforeGeneration();
@@ -108,19 +112,76 @@ public abstract class GenerationContext
 
     public abstract void BeforeDataClassGeneration(ObjectGenerationContext context);
 
+    public abstract void OnDataClassConstructorGeneration(ObjectGenerationContext context);
+
     public abstract void AfterDataClassGeneration(ObjectGenerationContext context);
 
     public abstract void AfterDataClassesGeneration();
+
+    public abstract void BeforeDataPropertyGeneration(PropertyGenerationContext context);
+
+    public virtual void OnDataPropertyGeneration(PropertyGenerationContext context)
+    {
+        var generateBackingFields = _configuration.PropertyGeneration == PropertyGenerationOption.BackingField;
+        if (generateBackingFields)
+        {
+            var useCompatibleVersion = Configuration.CSharpVersion == CSharpVersion.Compatible;
+            Writer.Write(" { get");
+            Writer.Write(useCompatibleVersion ? " { return " : " => ");
+            Writer.Write(context.PropertyBackingFieldName);
+            Writer.Write(";");
+
+            if (useCompatibleVersion)
+                Writer.Write(" }");
+
+            Writer.Write(context.SetterAccessibility.ToSetterAccessibilityPrefix());
+            Writer.Write(" set");
+            Writer.Write(useCompatibleVersion ? " { " : " => ");
+            Writer.Write(context.PropertyBackingFieldName);
+            Writer.Write(" = value;");
+
+            if (useCompatibleVersion)
+                Writer.Write(" }");
+
+            Writer.Write(" }");
+        }
+        else
+        {
+            Writer.Write(" { get; ");
+            Writer.Write(context.SetterAccessibility.ToSetterAccessibilityPrefix());
+            Writer.Write("set; }");
+        }
+    }
+
+    public abstract void AfterDataPropertyGeneration(PropertyGenerationContext context);
 
     public abstract void AfterGeneration();
 
     protected internal List<GraphQlField> GetFieldsToGenerate(GraphQlType type) =>
         type.Fields?.Where(FilterIfDeprecated).Where(FilterIfAllFieldsDeprecated).ToList();
 
+    public bool FilterIfDeprecated(GraphQlEnumValue field) => !field.IsDeprecated || Configuration.IncludeDeprecatedFields;
+
+    private bool FilterIfAllFieldsDeprecated(GraphQlField field)
+    {
+        var fieldType = GraphQlGenerator.UnwrapIfNotNullOrList(field.Type);
+        if (!fieldType.Kind.IsComplex())
+            return true;
+
+        var graphQlType = _complexTypes[fieldType.Name];
+        var nestedTypeFields =
+            graphQlType.Kind is GraphQlTypeKind.Union
+                ? graphQlType.PossibleTypes.Select(t => _complexTypes[t.Name]).SelectMany(t => t.Fields)
+                : graphQlType.Fields;
+
+        return nestedTypeFields.Any(FilterIfDeprecated);
+    }
+
+
     protected internal IEnumerable<GraphQlField> GetFragments(GraphQlType type)
     {
         if (type.Kind != GraphQlTypeKind.Union && type.Kind != GraphQlTypeKind.Interface)
-            return Enumerable.Empty<GraphQlField>();
+            return [];
 
         var fragments = new Dictionary<string, GraphQlField>();
         foreach (var possibleType in type.PossibleTypes)
@@ -159,7 +220,8 @@ public abstract class GenerationContext
                 return Configuration.ScalarFieldTypeMappingProvider.GetCustomScalarFieldType(Configuration, baseType, member.Type, member.Name);
 
             case GraphQlTypeKind.List:
-                var itemType = GraphQlGenerator.UnwrapListItemType(fieldType, Configuration.CSharpVersion == CSharpVersion.NewestWithNullableReferences, out var netCollectionOpenType);
+                var isCovarianceRequired = _typeFieldCovarianceRequired.Contains((baseType.Name, member.Name));
+                var itemType = GraphQlGenerator.UnwrapListItemType(fieldType, Configuration.CSharpVersion == CSharpVersion.NewestWithNullableReferences, isCovarianceRequired, out var netCollectionOpenType);
                 var unwrappedItemType = itemType?.UnwrapIfNonNull() ?? throw GraphQlGenerator.ListItemTypeResolutionFailedException(baseType.Name, fieldType.Name);
                 var itemTypeName = GetCSharpClassName(unwrappedItemType.Name);
                 var netItemType =
@@ -186,7 +248,7 @@ public abstract class GenerationContext
     }
 
     private string AddQuestionMarkIfNullableReferencesEnabled(string dataTypeIdentifier) =>
-        GraphQlGenerator.AddQuestionMarkIfNullableReferencesEnabled(Configuration, dataTypeIdentifier);
+        GraphQlGenerator.AddQuestionMarkIfNullableReferencesEnabled(Configuration.CSharpVersion, dataTypeIdentifier);
 
     internal bool IsUnknownObjectScalar(GraphQlType baseType, string valueName, GraphQlFieldType fieldType)
     {
@@ -297,7 +359,7 @@ public abstract class GenerationContext
         return ScalarFieldTypeDescription.FromNetTypeName(netTypeName);
     }
 
-    private void ResolverReferencedObjectTypes()
+    private void ResolveReferencedObjectTypes()
     {
         foreach (var graphQlType in Schema.Types.Where(t => t.Kind is GraphQlTypeKind.Object or GraphQlTypeKind.Interface or GraphQlTypeKind.List && !t.IsBuiltIn()))
             FindAllReferencedObjectTypes(graphQlType);
@@ -362,6 +424,9 @@ public abstract class GenerationContext
         if (type.Kind is GraphQlTypeKind.Union)
             return;
 
+        if (type.Kind is GraphQlTypeKind.Object or GraphQlTypeKind.Interface && !_referencedObjectTypes.Add(type.Name))
+            return;
+
         var members = (IEnumerable<IGraphQlMember>)type.InputFields ?? type.Fields?.Where(FilterIfDeprecated);
         foreach (var member in members ?? throw new InvalidOperationException($"no members defined for GraphQL type \"{type.Name}\" ({type.Kind})"))
         {
@@ -371,9 +436,6 @@ public abstract class GenerationContext
             {
                 case GraphQlTypeKind.Object:
                 case GraphQlTypeKind.Interface:
-                    if (!_referencedObjectTypes.Add(unwrappedType.Name))
-                        break;
-
                     var memberType = _complexTypes[unwrappedType.Name];
                     FindAllReferencedObjectTypes(memberType);
                     break;
@@ -387,10 +449,104 @@ public abstract class GenerationContext
             }
         }
     }
+
+    private void ResolveCovarianceRequiredFields()
+    {
+        var interfaceImplementations =
+            _complexTypes.Values
+                .Where(t => t.Kind is GraphQlTypeKind.Object && t.Interfaces?.Count > 0)
+                .SelectMany(t => t.Interfaces.Select(i => (InterfaceName: i.Name, ImplementationType: t)))
+                .ToLookup(x => x.InterfaceName, x => x.ImplementationType);
+
+        foreach (var interfaceType in _complexTypes.Values.Where(t => t.Kind is GraphQlTypeKind.Interface))
+        foreach (var interfaceField in interfaceType.Fields.Where(f => f.Type.UnwrapIfNonNull().Kind is GraphQlTypeKind.List))
+        foreach (var implementationType in interfaceImplementations[interfaceType.Name])
+        {
+            var implementationField = implementationType.Fields.SingleOrDefault(f => f.Name == interfaceField.Name);
+            var isSchemaInvalid = implementationField is null;
+            if (isSchemaInvalid)
+                continue;
+
+            var isCovarianceRequired = !implementationField.Type.Equals(interfaceField.Type);
+            if (!isCovarianceRequired)
+                continue;
+
+            _typeFieldCovarianceRequired.Add((interfaceType.Name, interfaceField.Name));
+            break;
+        }
+    }
+
+    private void ResolveTypeUnionLookup()
+    {
+        var duplicateCheck = new HashSet<string>();
+        _typeUnionMembership =
+            _complexTypes.Values
+                .Where(t => t.Kind is GraphQlTypeKind.Union)
+                .SelectMany(
+                    u =>
+                    {
+                        duplicateCheck.Clear();
+                        return u.PossibleTypes
+                            .Where(
+                                pt =>
+                                {
+                                    if (duplicateCheck.Add(pt.Name))
+                                        return true;
+
+                                    Warn($"duplicate union \"{u.Name}\" possible type \"{pt.Name}\"");
+                                    return false;
+                                })
+                            .Select(t => (UnionName: u.Name, PossibleTypeName: t.Name));
+                    })
+                .ToLookup(x => x.PossibleTypeName, x => x.UnionName);
+    }
+
+    private void ResolveDirectives()
+    {
+        foreach (var directive in Schema.Directives)
+            if (_directives.ContainsKey(directive.Name))
+                Warn($"duplicate \"{directive.Name}\" directive definition");
+            else
+                _directives[directive.Name] = directive;
+    }
+
+    protected void Warn(string message) => LogMessage?.Invoke($"WARNING: {message}");
+
+    protected void Log(string message) => LogMessage?.Invoke(message);
+
+    private static InvalidOperationException NotInitializedException(string propertyName) =>
+        new($"\"{propertyName}\" not initialized; call \"{nameof(Initialize)}\" method first. ");
 }
 
-public struct ObjectGenerationContext
+public record struct ObjectGenerationContext
 {
     public GraphQlType GraphQlType { get; set; }
     public string CSharpTypeName { get; set; }
+}
+
+public record PropertyGenerationContext
+{
+    public ObjectGenerationContext ObjectContext { get; }
+    public string PropertyName { get; }
+    public string PropertyBackingFieldName { get; }
+    public string PropertyCSharpTypeName { get; }
+
+    public PropertyAccessibility SetterAccessibility { get; set; }
+
+    internal PropertyGenerationContext(ObjectGenerationContext objectContext, string csharpTypeName, string propertyName, string propertyBackingFieldName)
+    {
+        ObjectContext = objectContext;
+        PropertyCSharpTypeName = csharpTypeName;
+        PropertyName = propertyName;
+        PropertyBackingFieldName = propertyBackingFieldName;
+    }
+}
+
+public enum PropertyAccessibility
+{
+    Public,
+    Internal,
+    Protected,
+    ProtectedInternal,
+    Private
 }

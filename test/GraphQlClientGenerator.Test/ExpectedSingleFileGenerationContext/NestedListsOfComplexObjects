@@ -8,8 +8,8 @@ public static class GraphQlTypes
     public const string ObjectWithNestedListsField = "ObjectWithNestedListsField";
     public const string Query = "Query";
 
-    public static readonly IReadOnlyDictionary<Type, string> ReverseMapping =
-        new Dictionary<Type, string>
+    public static readonly IReadOnlyDictionary<global::System.Type, string> ReverseMapping =
+        new Dictionary<global::System.Type, string>
         {
             { typeof(string), "String" }
         };
@@ -122,7 +122,7 @@ public partial class Query
 
 public partial class ObjectWithNestedListsField
 {
-    public IList<IList<AnotherComplex>> NestedListOfComplexObjects { get; set; }
+    public ICollection<ICollection<AnotherComplex>> NestedListOfComplexObjects { get; set; }
 }
 
 public partial class AnotherComplex

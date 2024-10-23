@@ -9,12 +9,7 @@ internal static class GraphQlCSharpFileHelper
     {
         try
         {
-            var generatedFiles = new List<CodeFileInfo>();
-            await GenerateClientSourceCode(console, options, generatedFiles);
-
-            foreach (var fileInfo in generatedFiles)
-                console.Out.WriteLine($"File {fileInfo.FileName} generated successfully ({fileInfo.Length:N0} B). ");
-
+            await GenerateClientSourceCode(console, options);
             return 0;
         }
         catch (Exception exception)
@@ -24,14 +19,14 @@ internal static class GraphQlCSharpFileHelper
         }
     }
 
-    private static async Task GenerateClientSourceCode(IConsole console, ProgramOptions options, List<CodeFileInfo> generatedFiles)
+    private static async Task GenerateClientSourceCode(IConsole console, ProgramOptions options)
     {
         GraphQlSchema schema;
 
         if (String.IsNullOrWhiteSpace(options.ServiceUrl))
         {
             var schemaJson = await File.ReadAllTextAsync(options.SchemaFileName);
-            console.Out.WriteLine($"GraphQL schema file {options.SchemaFileName} loaded ({schemaJson.Length:N0} B). ");
+            console.WriteLine($"GraphQL schema file {options.SchemaFileName} loaded ({schemaJson.Length:N0} B). ");
             schema = GraphQlGenerator.DeserializeGraphQlSchema(schemaJson);
         }
         else
@@ -39,16 +34,22 @@ internal static class GraphQlCSharpFileHelper
             if (!KeyValueParameterParser.TryGetCustomHeaders(options.Header, out var headers, out var headerParsingErrorMessage))
                 throw new InvalidOperationException(headerParsingErrorMessage);
 
-            schema = await GraphQlGenerator.RetrieveSchema(new HttpMethod(options.HttpMethod), options.ServiceUrl, headers);
-            console.Out.WriteLine($"GraphQL Schema retrieved from {options.ServiceUrl}. ");
+            using var httpClientHandler = GraphQlGenerator.CreateDefaultHttpClientHandler();
+            if (options.IgnoreServiceUrlCertificateErrors)
+                httpClientHandler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+
+            schema = await GraphQlGenerator.RetrieveSchema(new HttpMethod(options.HttpMethod), options.ServiceUrl, headers, httpClientHandler);
+            console.WriteLine($"GraphQL Schema retrieved from {options.ServiceUrl}. ");
         }
             
         var generatorConfiguration =
             new GraphQlGeneratorConfiguration
             {
+                TargetNamespace = options.Namespace,
                 CSharpVersion = options.CSharpVersion,
                 ClassPrefix = options.ClassPrefix,
                 ClassSuffix = options.ClassSuffix,
+                CodeDocumentationType = options.CodeDocumentationType,
                 GeneratePartialClasses = options.PartialClasses,
                 MemberAccessibility = options.MemberAccessibility,
                 IdTypeMapping = options.IdTypeMapping,
@@ -58,6 +59,7 @@ internal static class GraphQlCSharpFileHelper
                 JsonPropertyGeneration = options.JsonPropertyAttribute,
                 EnumValueNaming = options.EnumValueNaming,
                 DataClassMemberNullability = options.DataClassMemberNullability,
+                GenerationOrder = options.GenerationOrder,
                 IncludeDeprecatedFields = options.IncludeDeprecatedFields,
                 FileScopedNamespaces = options.FileScopedNamespaces
             };
@@ -69,16 +71,20 @@ internal static class GraphQlCSharpFileHelper
             generatorConfiguration.CustomClassNameMapping.Add(kvp);
 
         if (!String.IsNullOrEmpty(options.RegexScalarFieldTypeMappingConfigurationFile))
+        {
             generatorConfiguration.ScalarFieldTypeMappingProvider =
                 new RegexScalarFieldTypeMappingProvider(
                     RegexScalarFieldTypeMappingProvider.ParseRulesFromJson(await File.ReadAllTextAsync(options.RegexScalarFieldTypeMappingConfigurationFile)));
 
+            console.WriteLine($"Scalar field type mapping configuration file {options.RegexScalarFieldTypeMappingConfigurationFile} loaded. ");
+        }
+
         var generator = new GraphQlGenerator(generatorConfiguration);
 
-        if (options.OutputType == OutputType.SingleFile)
+        if (options.OutputType is OutputType.SingleFile)
         {
-            await File.WriteAllTextAsync(options.OutputPath, generator.GenerateFullClientCSharpFile(schema, options.Namespace));
-            generatedFiles.Add(new CodeFileInfo { FileName = options.OutputPath, Length = (int)new FileInfo(options.OutputPath).Length });
+            await File.WriteAllTextAsync(options.OutputPath, generator.GenerateFullClientCSharpFile(schema, console.WriteLine));
+            console.WriteLine($"File {options.OutputPath} generated successfully ({new FileInfo(options.OutputPath).Length:N0} B). ");
         }
         else
         {
@@ -88,9 +94,13 @@ internal static class GraphQlCSharpFileHelper
                     : null;
 
             var codeFileEmitter = new FileSystemEmitter(projectFileInfo?.DirectoryName ?? options.OutputPath);
-            var multipleFileGenerationContext = new MultipleFileGenerationContext(schema, codeFileEmitter, options.Namespace, projectFileInfo?.Name);
+            var multipleFileGenerationContext =
+                new MultipleFileGenerationContext(schema, codeFileEmitter, projectFileInfo?.Name)
+                {
+                    LogMessage = console.WriteLine
+                };
+
             generator.Generate(multipleFileGenerationContext);
-            generatedFiles.AddRange(multipleFileGenerationContext.Files);
         }
     }
 }

@@ -1,23 +1,34 @@
-﻿using System.Text;
-
-namespace GraphQlClientGenerator;
-
-public delegate string GetDataPropertyAccessorBodiesDelegate(string backingFieldName, ScalarFieldTypeDescription backingFieldType);
+﻿namespace GraphQlClientGenerator;
 
 public class GraphQlGeneratorConfiguration
 {
+    private string _targetNamespace = "GraphQlApi";
+
     public CSharpVersion CSharpVersion { get; set; }
 
     public string ClassPrefix { get; set; }
 
     public string ClassSuffix { get; set; }
 
+    public string TargetNamespace
+
+    {
+        get => _targetNamespace;
+        set
+        {
+            if (!CSharpHelper.IsValidNamespace(value))
+                throw new ArgumentException($"namespace \"{value}\" is not valid. ");
+
+            _targetNamespace = value;
+        }
+    }
+
     /// <summary>
-    /// Allows to define custom class names for specific GraphQL types. One common reason for this is to avoid property of the same name as its parent class.
+    /// Allows to define custom class names for specific GraphQL types.
     /// </summary>
     public IDictionary<string, string> CustomClassNameMapping { get; } = new Dictionary<string, string>();
 
-    public CommentGenerationOption CommentGeneration { get; set; }
+    public CodeDocumentationType CodeDocumentationType { get; set; }
 
     public bool IncludeDeprecatedFields { get; set; }
 
@@ -64,18 +75,15 @@ public class GraphQlGeneratorConfiguration
     public MemberAccessibility MemberAccessibility { get; set; }
 
     /// <summary>
-    /// This property is used for mapping GraphQL scalar type into specific .NET type. By default any custom GraphQL scalar type is mapped into <see cref="System.Object"/>.
+    /// This property is used for mapping GraphQL scalar type into specific .NET type. By default, any custom GraphQL scalar type is mapped into <see cref="object"/>.
     /// </summary>
     public IScalarFieldTypeMappingProvider ScalarFieldTypeMappingProvider { get; set; }
-
-    /// <summary>
-    /// Used for custom data property accessor bodies generation; applicable only when <code>PropertyGeneration = PropertyGenerationOption.BackingField</code>.
-    /// </summary>
-    public GetDataPropertyAccessorBodiesDelegate PropertyAccessorBodyWriter { get; set; }
 
     public bool FileScopedNamespaces { get; set; }
 
     public DataClassMemberNullability DataClassMemberNullability { get; set; }
+
+    public GenerationOrder GenerationOrder { get; set; }
 
     public GraphQlGeneratorConfiguration() => Reset();
 
@@ -86,8 +94,7 @@ public class GraphQlGeneratorConfiguration
         CustomClassNameMapping.Clear();
         CSharpVersion = CSharpVersion.Compatible;
         ScalarFieldTypeMappingProvider = DefaultScalarFieldTypeMappingProvider.Instance;
-        PropertyAccessorBodyWriter = GeneratePropertyAccessors;
-        CommentGeneration = CommentGenerationOption.Disabled;
+        CodeDocumentationType = CodeDocumentationType.Disabled;
         IncludeDeprecatedFields = false;
         FloatTypeMapping = FloatTypeMapping.Decimal;
         BooleanTypeMapping = BooleanTypeMapping.Boolean;
@@ -101,31 +108,7 @@ public class GraphQlGeneratorConfiguration
         EnumValueNaming = EnumValueNamingOption.CSharp;
         FileScopedNamespaces = false;
         DataClassMemberNullability = DataClassMemberNullability.AlwaysNullable;
-    }
-
-    public string GeneratePropertyAccessors(string backingFieldName, ScalarFieldTypeDescription backingFieldType)
-    {
-        var useCompatibleVersion = CSharpVersion == CSharpVersion.Compatible;
-        var builder = new StringBuilder();
-        builder.Append(" { get");
-        builder.Append(useCompatibleVersion ? " { return " : " => ");
-        builder.Append(backingFieldName);
-        builder.Append(";");
-
-        if (useCompatibleVersion)
-            builder.Append(" }");
-
-        builder.Append(" set");
-        builder.Append(useCompatibleVersion ? " { " : " => ");
-        builder.Append(backingFieldName);
-        builder.Append(" = value;");
-
-        if (useCompatibleVersion)
-            builder.Append(" }");
-
-        builder.Append(" }");
-
-        return builder.ToString();
+        GenerationOrder = GenerationOrder.DefinedBySchema;
     }
 }
 
@@ -194,10 +177,10 @@ public enum PropertyGenerationOption
 }
 
 [Flags]
-public enum CommentGenerationOption
+public enum CodeDocumentationType
 {
     Disabled = 0,
-    CodeSummary = 1,
+    XmlSummary = 1,
     DescriptionAttribute = 2
 }
 
@@ -205,4 +188,10 @@ public enum DataClassMemberNullability
 {
     AlwaysNullable,
     DefinedBySchema
+}
+
+public enum GenerationOrder
+{
+    DefinedBySchema,
+    Alphabetical
 }

@@ -6,7 +6,7 @@ GraphQL C# client generator
 =======================
 
 [![Build](https://ci.appveyor.com/api/projects/status/t4iti5bn5ubs2k3k?svg=true&pendingText=pending&passingText=passed&failingText=failed)](https://ci.appveyor.com/project/Husqvik/graphql-client-generator)
-[![NuGet Badge](https://buildstats.info/nuget/GraphQlClientGenerator?includePreReleases=true)](https://www.nuget.org/packages/GraphQlClientGenerator)
+[![NuGet Badge](https://badge.fury.io/nu/GraphQlClientGenerator.svg)](https://www.nuget.org/packages/GraphQlClientGenerator)
 
 This simple console app generates C# GraphQL query builder and data classes for simple, compiler checked, usage of a GraphQL API.
 
@@ -39,15 +39,20 @@ Code example for class generation:
 ```csharp
 var schema = await GraphQlGenerator.RetrieveSchema(url);
 var generator = new GraphQlGenerator();
-var generatedClasses = generator.Generate(schema);
+var generatedClasses = generator.GenerateFullClientCSharpFile(schema);
 ```
 
-or
+or using full blown setup:
 
 ```csharp
 var schema = await GraphQlGenerator.RetrieveSchema(url);
-var csharpCode = new GraphQlGenerator().GenerateFullClientCSharpFile(schema, "MyGqlApiClient");
-await File.WriteAllTextAsync("MyGqlApiClient.cs", csharpCode);
+var builder = new StringBuilder();
+using var writer = new StringWriter(builder);
+var generationContext = new SingleFileGenerationContext(schema, writer) { LogMessage = Console.WriteLine };
+var configuration = new GraphQlGeneratorConfiguration { TargetNamespace = "MyGqlApiClient", ... };
+var generator = new GraphQlGenerator(configuration);
+generator.Generate(generationContext);
+var csharpCode = builder.ToString();
 ```
 
 C# 9 source generator

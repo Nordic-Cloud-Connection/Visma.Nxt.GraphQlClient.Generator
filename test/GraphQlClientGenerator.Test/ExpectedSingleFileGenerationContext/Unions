@@ -15,12 +15,15 @@ public static class GraphQlTypes
     public const string ConcreteType1 = "ConcreteType1";
     public const string ConcreteType2 = "ConcreteType2";
     public const string ConcreteType3 = "ConcreteType3";
+    public const string ConcreteType4 = "ConcreteType4";
     public const string Message = "Message";
     public const string Mutation = "Mutation";
     public const string Query = "Query";
     public const string SimpleObjectType = "SimpleObjectType";
+    public const string Type = "Type";
     public const string TypeWithOnlyDeprecatedFields = "TypeWithOnlyDeprecatedFields";
     public const string UnderscoreNamedClass = "underscore_named_class";
+    public const string ValueAccessorObject = "ValueAccessorObject";
 
     public const string Collision = "Collision";
     public const string InputType = "InputType";
@@ -28,10 +31,15 @@ public static class GraphQlTypes
 
     public const string UnionType = "UnionType";
 
+    public const string BaseType = "BaseType";
     public const string NamedType = "NamedType";
+    public const string OtherWithName = "OtherWithName";
+    public const string ValueAccessor = "ValueAccessor";
+    public const string WithOnlyDeprecatedFields = "WithOnlyDeprecatedFields";
+    public const string WithValueAccessor = "WithValueAccessor";
 
-    public static readonly IReadOnlyDictionary<Type, string> ReverseMapping =
-        new Dictionary<Type, string>
+    public static readonly IReadOnlyDictionary<global::System.Type, string> ReverseMapping =
+        new Dictionary<global::System.Type, string>
         {
             { typeof(string), "String" },
             { typeof(Guid), "ID" },
@@ -79,6 +87,22 @@ public class CustomDirectiveDirective : GraphQlDirective
 #endregion
 
 #region builder classes
+public partial class TypeQueryBuilder : GraphQlQueryBuilder<TypeQueryBuilder>
+{
+    private static readonly GraphQlFieldMetadata[] AllFieldMetadata =
+    {
+        new GraphQlFieldMetadata { Name = "id", DefaultAlias = "Id", IsComplex = true }
+    };
+
+    protected override string TypeName { get; } = "Type";
+
+    public override IReadOnlyList<GraphQlFieldMetadata> AllFields { get; } = AllFieldMetadata;
+
+    public TypeQueryBuilder WithId(string? alias = "Id", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("id", alias, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public TypeQueryBuilder ExceptId() => ExceptField("id");
+}
+
 public partial class SimpleObjectTypeQueryBuilder : GraphQlQueryBuilder<SimpleObjectTypeQueryBuilder>
 {
     private static readonly GraphQlFieldMetadata[] AllFieldMetadata =
@@ -86,7 +110,8 @@ public partial class SimpleObjectTypeQueryBuilder : GraphQlQueryBuilder<SimpleOb
         new GraphQlFieldMetadata { Name = "id", DefaultAlias = "Id" },
         new GraphQlFieldMetadata { Name = "stringValueNullable", DefaultAlias = "StringValueNullable" },
         new GraphQlFieldMetadata { Name = "stringValue", DefaultAlias = "StringValue" },
-        new GraphQlFieldMetadata { Name = "stringArrayValue", DefaultAlias = "StringArrayValue", IsComplex = true }
+        new GraphQlFieldMetadata { Name = "stringArrayValue", DefaultAlias = "StringArrayValue", IsComplex = true },
+        new GraphQlFieldMetadata { Name = "nestedList", DefaultAlias = "NestedList", IsComplex = true, QueryBuilderType = typeof(SimpleObjectTypeQueryBuilder) }
     };
 
     protected override string TypeName { get; } = "SimpleObjectType";
@@ -108,13 +133,17 @@ public partial class SimpleObjectTypeQueryBuilder : GraphQlQueryBuilder<SimpleOb
     public SimpleObjectTypeQueryBuilder WithStringArrayValue(string? alias = "StringArrayValue", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("stringArrayValue", alias, new GraphQlDirective?[] { include, skip, customDirective });
 
     public SimpleObjectTypeQueryBuilder ExceptStringArrayValue() => ExceptField("stringArrayValue");
+
+    public SimpleObjectTypeQueryBuilder WithNestedList(SimpleObjectTypeQueryBuilder simpleObjectTypeQueryBuilder, string? alias = "NestedList", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithObjectField("nestedList", alias, simpleObjectTypeQueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public SimpleObjectTypeQueryBuilder ExceptNestedList() => ExceptField("nestedList");
 }
 
 public partial class UnionTypeQueryBuilder : GraphQlQueryBuilder<UnionTypeQueryBuilder>
 {
     private static readonly GraphQlFieldMetadata[] AllFieldMetadata = Array.Empty<GraphQlFieldMetadata>();
 
-    public UnionTypeQueryBuilder() => WithTypeName();
+    public UnionTypeQueryBuilder() => WithTypeName("TypeName");
 
     protected override string TypeName { get; } = "UnionType";
 
@@ -125,6 +154,8 @@ public partial class UnionTypeQueryBuilder : GraphQlQueryBuilder<UnionTypeQueryB
     public UnionTypeQueryBuilder WithConcreteType2Fragment(ConcreteType2QueryBuilder concreteType2QueryBuilder, IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithFragment(concreteType2QueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
 
     public UnionTypeQueryBuilder WithConcreteType3Fragment(ConcreteType3QueryBuilder concreteType3QueryBuilder, IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithFragment(concreteType3QueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public UnionTypeQueryBuilder WithConcreteType4Fragment(ConcreteType4QueryBuilder concreteType4QueryBuilder, IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithFragment(concreteType4QueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
 }
 
 public partial class NamedTypeQueryBuilder : GraphQlQueryBuilder<NamedTypeQueryBuilder>
@@ -134,7 +165,7 @@ public partial class NamedTypeQueryBuilder : GraphQlQueryBuilder<NamedTypeQueryB
         new GraphQlFieldMetadata { Name = "name", DefaultAlias = "Name" }
     };
 
-    public NamedTypeQueryBuilder() => WithTypeName();
+    public NamedTypeQueryBuilder() => WithTypeName("TypeName");
 
     protected override string TypeName { get; } = "NamedType";
 
@@ -151,18 +182,133 @@ public partial class NamedTypeQueryBuilder : GraphQlQueryBuilder<NamedTypeQueryB
     public NamedTypeQueryBuilder WithConcreteType3Fragment(ConcreteType3QueryBuilder concreteType3QueryBuilder, IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithFragment(concreteType3QueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
 }
 
+public partial class OtherWithNameQueryBuilder : GraphQlQueryBuilder<OtherWithNameQueryBuilder>
+{
+    private static readonly GraphQlFieldMetadata[] AllFieldMetadata =
+    {
+        new GraphQlFieldMetadata { Name = "name", DefaultAlias = "Name" }
+    };
+
+    public OtherWithNameQueryBuilder() => WithTypeName("TypeName");
+
+    protected override string TypeName { get; } = "OtherWithName";
+
+    public override IReadOnlyList<GraphQlFieldMetadata> AllFields { get; } = AllFieldMetadata;
+
+    public OtherWithNameQueryBuilder WithName(string? alias = "Name", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("name", alias, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public OtherWithNameQueryBuilder ExceptName() => ExceptField("name");
+
+    public OtherWithNameQueryBuilder WithConcreteType1Fragment(ConcreteType1QueryBuilder concreteType1QueryBuilder, IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithFragment(concreteType1QueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+}
+
+public partial class BaseTypeQueryBuilder : GraphQlQueryBuilder<BaseTypeQueryBuilder>
+{
+    private static readonly GraphQlFieldMetadata[] AllFieldMetadata =
+    {
+        new GraphQlFieldMetadata { Name = "name", DefaultAlias = "Name" }
+    };
+
+    public BaseTypeQueryBuilder() => WithTypeName("TypeName");
+
+    protected override string TypeName { get; } = "BaseType";
+
+    public override IReadOnlyList<GraphQlFieldMetadata> AllFields { get; } = AllFieldMetadata;
+
+    public BaseTypeQueryBuilder WithName(string? alias = "Name", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("name", alias, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public BaseTypeQueryBuilder ExceptName() => ExceptField("name");
+
+    public BaseTypeQueryBuilder WithConcreteType1Fragment(ConcreteType1QueryBuilder concreteType1QueryBuilder, IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithFragment(concreteType1QueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+}
+
+public partial class ValueAccessorQueryBuilder : GraphQlQueryBuilder<ValueAccessorQueryBuilder>
+{
+    private static readonly GraphQlFieldMetadata[] AllFieldMetadata =
+    {
+        new GraphQlFieldMetadata { Name = "value", DefaultAlias = "Value" }
+    };
+
+    public ValueAccessorQueryBuilder() => WithTypeName("TypeName");
+
+    protected override string TypeName { get; } = "ValueAccessor";
+
+    public override IReadOnlyList<GraphQlFieldMetadata> AllFields { get; } = AllFieldMetadata;
+
+    public ValueAccessorQueryBuilder WithValue(string? alias = "Value", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("value", alias, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public ValueAccessorQueryBuilder ExceptValue() => ExceptField("value");
+
+    public ValueAccessorQueryBuilder WithValueAccessorObjectFragment(ValueAccessorObjectQueryBuilder valueAccessorObjectQueryBuilder, IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithFragment(valueAccessorObjectQueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+}
+
+public partial class ValueAccessorObjectQueryBuilder : GraphQlQueryBuilder<ValueAccessorObjectQueryBuilder>
+{
+    private static readonly GraphQlFieldMetadata[] AllFieldMetadata =
+    {
+        new GraphQlFieldMetadata { Name = "value", DefaultAlias = "Value" }
+    };
+
+    protected override string TypeName { get; } = "ValueAccessorObject";
+
+    public override IReadOnlyList<GraphQlFieldMetadata> AllFields { get; } = AllFieldMetadata;
+
+    public ValueAccessorObjectQueryBuilder WithValue(string? alias = "Value", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("value", alias, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public ValueAccessorObjectQueryBuilder ExceptValue() => ExceptField("value");
+}
+
+public partial class WithValueAccessorQueryBuilder : GraphQlQueryBuilder<WithValueAccessorQueryBuilder>
+{
+    private static readonly GraphQlFieldMetadata[] AllFieldMetadata =
+    {
+        new GraphQlFieldMetadata { Name = "accessor", DefaultAlias = "Accessor", IsComplex = true, QueryBuilderType = typeof(ValueAccessorQueryBuilder) },
+        new GraphQlFieldMetadata { Name = "accessors", DefaultAlias = "Accessors", IsComplex = true, QueryBuilderType = typeof(ValueAccessorQueryBuilder) },
+        new GraphQlFieldMetadata { Name = "nestedAccessors", DefaultAlias = "NestedAccessors", IsComplex = true, QueryBuilderType = typeof(ValueAccessorQueryBuilder) }
+    };
+
+    public WithValueAccessorQueryBuilder() => WithTypeName("TypeName");
+
+    protected override string TypeName { get; } = "WithValueAccessor";
+
+    public override IReadOnlyList<GraphQlFieldMetadata> AllFields { get; } = AllFieldMetadata;
+
+    public WithValueAccessorQueryBuilder WithAccessor(ValueAccessorQueryBuilder valueAccessorQueryBuilder, string? alias = "Accessor", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithObjectField("accessor", alias, valueAccessorQueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public WithValueAccessorQueryBuilder ExceptAccessor() => ExceptField("accessor");
+
+    public WithValueAccessorQueryBuilder WithAccessors(ValueAccessorQueryBuilder valueAccessorQueryBuilder, string? alias = "Accessors", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithObjectField("accessors", alias, valueAccessorQueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public WithValueAccessorQueryBuilder ExceptAccessors() => ExceptField("accessors");
+
+    public WithValueAccessorQueryBuilder WithNestedAccessors(ValueAccessorQueryBuilder valueAccessorQueryBuilder, string? alias = "NestedAccessors", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithObjectField("nestedAccessors", alias, valueAccessorQueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public WithValueAccessorQueryBuilder ExceptNestedAccessors() => ExceptField("nestedAccessors");
+
+    public WithValueAccessorQueryBuilder WithConcreteType1Fragment(ConcreteType1QueryBuilder concreteType1QueryBuilder, IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithFragment(concreteType1QueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+}
+
 public partial class ConcreteType1QueryBuilder : GraphQlQueryBuilder<ConcreteType1QueryBuilder>
 {
     private static readonly GraphQlFieldMetadata[] AllFieldMetadata =
     {
+        new GraphQlFieldMetadata { Name = "TypeName" },
         new GraphQlFieldMetadata { Name = "name", DefaultAlias = "Name" },
         new GraphQlFieldMetadata { Name = "concreteType1Field", DefaultAlias = "ConcreteType1Field" },
-        new GraphQlFieldMetadata { Name = "Value" }
+        new GraphQlFieldMetadata { Name = "value", DefaultAlias = "Value" },
+        new GraphQlFieldMetadata { Name = "deprecated_field", DefaultAlias = "DeprecatedField" },
+        new GraphQlFieldMetadata { Name = "accessor", DefaultAlias = "Accessor", IsComplex = true, QueryBuilderType = typeof(ValueAccessorObjectQueryBuilder) },
+        new GraphQlFieldMetadata { Name = "accessors", DefaultAlias = "Accessors", IsComplex = true, QueryBuilderType = typeof(ValueAccessorObjectQueryBuilder) },
+        new GraphQlFieldMetadata { Name = "nestedAccessors", DefaultAlias = "NestedAccessors", IsComplex = true, QueryBuilderType = typeof(ValueAccessorObjectQueryBuilder) }
     };
 
     protected override string TypeName { get; } = "ConcreteType1";
 
     public override IReadOnlyList<GraphQlFieldMetadata> AllFields { get; } = AllFieldMetadata;
+
+    public ConcreteType1QueryBuilder WithTypeName(string? alias = null, IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("TypeName", alias, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public ConcreteType1QueryBuilder ExceptTypeName() => ExceptField("TypeName");
 
     public ConcreteType1QueryBuilder WithName(string? alias = "Name", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("name", alias, new GraphQlDirective?[] { include, skip, customDirective });
 
@@ -172,9 +318,25 @@ public partial class ConcreteType1QueryBuilder : GraphQlQueryBuilder<ConcreteTyp
 
     public ConcreteType1QueryBuilder ExceptConcreteType1Field() => ExceptField("concreteType1Field");
 
-    public ConcreteType1QueryBuilder WithValue(string? alias = null, IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("Value", alias, new GraphQlDirective?[] { include, skip, customDirective });
+    public ConcreteType1QueryBuilder WithValue(string? alias = "Value", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("value", alias, new GraphQlDirective?[] { include, skip, customDirective });
 
-    public ConcreteType1QueryBuilder ExceptValue() => ExceptField("Value");
+    public ConcreteType1QueryBuilder ExceptValue() => ExceptField("value");
+
+    public ConcreteType1QueryBuilder WithDeprecatedField(string? alias = "DeprecatedField", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("deprecated_field", alias, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public ConcreteType1QueryBuilder ExceptDeprecatedField() => ExceptField("deprecated_field");
+
+    public ConcreteType1QueryBuilder WithAccessor(ValueAccessorObjectQueryBuilder valueAccessorObjectQueryBuilder, string? alias = "Accessor", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithObjectField("accessor", alias, valueAccessorObjectQueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public ConcreteType1QueryBuilder ExceptAccessor() => ExceptField("accessor");
+
+    public ConcreteType1QueryBuilder WithAccessors(ValueAccessorObjectQueryBuilder valueAccessorObjectQueryBuilder, string? alias = "Accessors", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithObjectField("accessors", alias, valueAccessorObjectQueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public ConcreteType1QueryBuilder ExceptAccessors() => ExceptField("accessors");
+
+    public ConcreteType1QueryBuilder WithNestedAccessors(ValueAccessorObjectQueryBuilder valueAccessorObjectQueryBuilder, string? alias = "NestedAccessors", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithObjectField("nestedAccessors", alias, valueAccessorObjectQueryBuilder, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public ConcreteType1QueryBuilder ExceptNestedAccessors() => ExceptField("nestedAccessors");
 }
 
 public partial class ConcreteType2QueryBuilder : GraphQlQueryBuilder<ConcreteType2QueryBuilder>
@@ -237,6 +399,22 @@ public partial class ConcreteType3QueryBuilder : GraphQlQueryBuilder<ConcreteTyp
     }
 
     public ConcreteType3QueryBuilder ExceptFunction() => ExceptField("function");
+}
+
+public partial class ConcreteType4QueryBuilder : GraphQlQueryBuilder<ConcreteType4QueryBuilder>
+{
+    private static readonly GraphQlFieldMetadata[] AllFieldMetadata =
+    {
+        new GraphQlFieldMetadata { Name = "concreteType4Field", DefaultAlias = "ConcreteType4Field" }
+    };
+
+    protected override string TypeName { get; } = "ConcreteType4";
+
+    public override IReadOnlyList<GraphQlFieldMetadata> AllFields { get; } = AllFieldMetadata;
+
+    public ConcreteType4QueryBuilder WithConcreteType4Field(string? alias = "ConcreteType4Field", IncludeDirective? include = null, SkipDirective? skip = null, CustomDirectiveDirective? customDirective = null) => WithScalarField("concreteType4Field", alias, new GraphQlDirective?[] { include, skip, customDirective });
+
+    public ConcreteType4QueryBuilder ExceptConcreteType4Field() => ExceptField("concreteType4Field");
 }
 
 public partial class QueryQueryBuilder : GraphQlQueryBuilder<QueryQueryBuilder>
@@ -651,12 +829,18 @@ public partial class Collision3 : IGraphQlInputObject
 #endregion
 
 #region data classes
+public partial class Type
+{
+    public object? Id { get; set; }
+}
+
 public partial class SimpleObjectType
 {
     public Guid? Id { get; set; }
     public string? StringValueNullable { get; set; }
     public string? StringValue { get; set; }
     public ICollection<string>? StringArrayValue { get; set; }
+    public ICollection<SimpleObjectType?>? NestedList { get; set; }
 }
 
 public partial interface IUnionType
@@ -668,12 +852,60 @@ public partial interface INamedType
     string? Name { get; set; }
 }
 
-[GraphQlObjectType("ConcreteType1")]
-public partial class ConcreteType1 : IUnionType, INamedType
+public partial interface IWithOnlyDeprecatedFields
 {
+}
+
+public partial interface IOtherWithName
+{
+    string? Name { get; set; }
+}
+
+public partial interface IBaseType : INamedType, IOtherWithName
+{
+}
+
+public partial interface IValueAccessor
+{
+    string? Value { get; set; }
+}
+
+[GraphQlObjectType("ValueAccessorObject")]
+public partial class ValueAccessorObject : IValueAccessor
+{
+    public string? Value { get; set; }
+}
+
+public partial interface IWithValueAccessor
+{
+    #if !GRAPHQL_GENERATOR_DISABLE_NEWTONSOFT_JSON
+    [JsonConverter(typeof(GraphQlInterfaceJsonConverter))]
+    #endif
+    IValueAccessor? Accessor { get; set; }
+    #if !GRAPHQL_GENERATOR_DISABLE_NEWTONSOFT_JSON
+    [JsonConverter(typeof(GraphQlInterfaceJsonConverter))]
+    #endif
+    IEnumerable<IValueAccessor>? Accessors { get; set; }
+    #if !GRAPHQL_GENERATOR_DISABLE_NEWTONSOFT_JSON
+    [JsonConverter(typeof(GraphQlInterfaceJsonConverter))]
+    #endif
+    IEnumerable<IEnumerable<IValueAccessor>>? NestedAccessors { get; set; }
+}
+
+[GraphQlObjectType("ConcreteType1")]
+public partial class ConcreteType1 : IUnionType, IBaseType, INamedType, IOtherWithName, IWithValueAccessor, IWithOnlyDeprecatedFields
+{
+    public string? TypeName { get; set; }
     public string? Name { get; set; }
     public string? ConcreteType1Field { get; set; }
     public string? Value { get; set; }
+    public string? DeprecatedField { get; set; }
+    public ValueAccessorObject? Accessor { get; set; }
+    public ICollection<ValueAccessorObject>? Accessors { get; set; }
+    public ICollection<ICollection<ValueAccessorObject>>? NestedAccessors { get; set; }
+    IValueAccessor? IWithValueAccessor.Accessor { get => Accessor; set => throw new NotSupportedException("Use \"ConcreteType1.Accessor\" property setter"); }
+    IEnumerable<IValueAccessor>? IWithValueAccessor.Accessors { get => Accessors; set => throw new NotSupportedException("Use \"ConcreteType1.Accessors\" property setter"); }
+    IEnumerable<IEnumerable<IValueAccessor>>? IWithValueAccessor.NestedAccessors { get => NestedAccessors; set => throw new NotSupportedException("Use \"ConcreteType1.NestedAccessors\" property setter"); }
 }
 
 [GraphQlObjectType("ConcreteType2")]
@@ -693,6 +925,12 @@ public partial class ConcreteType3 : IUnionType, INamedType
     public string? Function { get; set; }
 }
 
+[GraphQlObjectType("ConcreteType4")]
+public partial class ConcreteType4 : IUnionType
+{
+    public string? ConcreteType4Field { get; set; }
+}
+
 public partial class Query
 {
     public DateTimeOffset? ScalarValue { get; set; }
@@ -710,7 +948,7 @@ public partial class Query
     #endif
     public ICollection<INamedType>? Interfaces { get; set; }
     public UnderscoreNamedClass? UnderscoreNamedField { get; set; }
-    public IList<IList<IList<decimal>>?>? NestedLists { get; set; }
+    public ICollection<ICollection<ICollection<decimal>>?>? NestedLists { get; set; }
     public string? _ { get; set; }
     public string? COLLISIONS { get; set; }
     public string? collisions { get; set; }

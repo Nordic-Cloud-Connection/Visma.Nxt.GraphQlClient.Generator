@@ -40,14 +40,16 @@ public class GraphQlClientSourceGenerator : ISourceGenerator
             context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey("ServiceUrl"), out var serviceUrl);
             var isServiceUrlMissing = String.IsNullOrWhiteSpace(serviceUrl);
             var graphQlSchemaFiles = context.AdditionalFiles.Where(f => Path.GetFileName(f.Path).EndsWith(".gql.schema.json", StringComparison.OrdinalIgnoreCase)).ToList();
-            var regexScalarFieldTypeMappingProviderConfigurationFile =
-                context.AdditionalFiles.SingleOrDefault(f => String.Equals(Path.GetFileName(f.Path), FileNameRegexScalarFieldTypeMappingProviderConfiguration, StringComparison.OrdinalIgnoreCase));
+            var regexScalarFieldTypeMappingProviderConfigurationJson =
+                context.AdditionalFiles
+                    .SingleOrDefault(f => String.Equals(Path.GetFileName(f.Path), FileNameRegexScalarFieldTypeMappingProviderConfiguration, StringComparison.OrdinalIgnoreCase))
+                    ?.GetText()
+                    ?.ToString();
 
-            ICollection<RegexScalarFieldTypeMappingRule> regexScalarFieldTypeMappingProviderRules = null;
-
-            if (regexScalarFieldTypeMappingProviderConfigurationFile is not null)
-                regexScalarFieldTypeMappingProviderRules =
-                    RegexScalarFieldTypeMappingProvider.ParseRulesFromJson(regexScalarFieldTypeMappingProviderConfigurationFile.GetText().ToString());
+            var regexScalarFieldTypeMappingProviderRules =
+                regexScalarFieldTypeMappingProviderConfigurationJson is not null
+                    ? RegexScalarFieldTypeMappingProvider.ParseRulesFromJson(regexScalarFieldTypeMappingProviderConfigurationJson)
+                    : null;
 
             var isSchemaFileSpecified = graphQlSchemaFiles.Any();
             if (isServiceUrlMissing && !isSchemaFileSpecified)
@@ -77,7 +79,7 @@ public class GraphQlClientSourceGenerator : ISourceGenerator
             {
                 var root = (CompilationUnitSyntax)compilation.SyntaxTrees.FirstOrDefault()?.GetRoot();
                 var namespaceIdentifier = (IdentifierNameSyntax)root?.Members.OfType<NamespaceDeclarationSyntax>().FirstOrDefault()?.Name;
-                if (namespaceIdentifier == null)
+                if (namespaceIdentifier is null)
                 {
                     context.ReportDiagnostic(
                         Diagnostic.Create(
@@ -97,7 +99,7 @@ public class GraphQlClientSourceGenerator : ISourceGenerator
                         $"\"GraphQlClientGenerator_Namespace\" not specified; using \"{@namespace}\""));
             }
 
-            var configuration = new GraphQlGeneratorConfiguration { TreatUnknownObjectAsScalar = true };
+            var configuration = new GraphQlGeneratorConfiguration { TreatUnknownObjectAsScalar = true, TargetNamespace = @namespace };
 
             context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey("ClassPrefix"), out var classPrefix);
             configuration.ClassPrefix = classPrefix;
@@ -111,60 +113,27 @@ public class GraphQlClientSourceGenerator : ISourceGenerator
                         ? CSharpVersion.Newest
                         : CSharpVersion.NewestWithNullableReferences;
 
-            var currentParameterName = "IncludeDeprecatedFields";
-            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var includeDeprecatedFieldsRaw);
+            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey("IncludeDeprecatedFields"), out var includeDeprecatedFieldsRaw);
             configuration.IncludeDeprecatedFields = !String.IsNullOrWhiteSpace(includeDeprecatedFieldsRaw) && Convert.ToBoolean(includeDeprecatedFieldsRaw);
 
-            currentParameterName = "HttpMethod";
-            if (!context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var httpMethod))
+            if (!context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey("HttpMethod"), out var httpMethod))
                 httpMethod = "POST";
 
-            currentParameterName = "CommentGeneration";
-            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var commentGenerationRaw);
-            configuration.CommentGeneration =
-                String.IsNullOrWhiteSpace(commentGenerationRaw)
-                    ? CommentGenerationOption.CodeSummary
-                    : (CommentGenerationOption)Enum.Parse(typeof(CommentGenerationOption), commentGenerationRaw, true);
+            SetConfigurationEnumValue(context, "CodeDocumentationType", CodeDocumentationType.XmlSummary, v => configuration.CodeDocumentationType = v);
+            SetConfigurationEnumValue(context, "FloatTypeMapping", FloatTypeMapping.Decimal, v => configuration.FloatTypeMapping = v);
+            SetConfigurationEnumValue(context, "BooleanTypeMapping", BooleanTypeMapping.Boolean, v => configuration.BooleanTypeMapping = v);
+            SetConfigurationEnumValue(context, "IdTypeMapping", IdTypeMapping.Guid, v => configuration.IdTypeMapping = v);
+            SetConfigurationEnumValue(context, "JsonPropertyGeneration", JsonPropertyGenerationOption.CaseInsensitive, v => configuration.JsonPropertyGeneration = v);
+            SetConfigurationEnumValue(context, "EnumValueNaming", EnumValueNamingOption.CSharp, v => configuration.EnumValueNaming = v);
+            SetConfigurationEnumValue(context, "DataClassMemberNullability", DataClassMemberNullability.AlwaysNullable, v => configuration.DataClassMemberNullability = v);
+            SetConfigurationEnumValue(context, "GenerationOrder", GenerationOrder.DefinedBySchema, v => configuration.GenerationOrder = v);
 
-            currentParameterName = "FloatTypeMapping";
-            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var floatTypeMappingRaw);
-            configuration.FloatTypeMapping =
-                String.IsNullOrWhiteSpace(floatTypeMappingRaw)
-                    ? FloatTypeMapping.Decimal
-                    : (FloatTypeMapping)Enum.Parse(typeof(FloatTypeMapping), floatTypeMappingRaw, true);
+            var outputType = OutputType.SingleFile;
+            SetConfigurationEnumValue(context, "OutputType", OutputType.SingleFile, v => outputType = v);
 
-            currentParameterName = "BooleanTypeMapping";
-            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var booleanTypeMappingRaw);
-            configuration.BooleanTypeMapping =
-                String.IsNullOrWhiteSpace(booleanTypeMappingRaw)
-                    ? BooleanTypeMapping.Boolean
-                    : (BooleanTypeMapping)Enum.Parse(typeof(BooleanTypeMapping), booleanTypeMappingRaw, true);
-
-            currentParameterName = "IdTypeMapping";
-            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var idTypeMappingRaw);
-            configuration.IdTypeMapping =
-                String.IsNullOrWhiteSpace(idTypeMappingRaw)
-                    ? IdTypeMapping.Guid
-                    : (IdTypeMapping)Enum.Parse(typeof(IdTypeMapping), idTypeMappingRaw, true);
-
-            currentParameterName = "JsonPropertyGeneration";
-            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var jsonPropertyGenerationRaw);
-            configuration.JsonPropertyGeneration =
-                String.IsNullOrWhiteSpace(jsonPropertyGenerationRaw)
-                    ? JsonPropertyGenerationOption.CaseInsensitive
-                    : (JsonPropertyGenerationOption)Enum.Parse(typeof(JsonPropertyGenerationOption), jsonPropertyGenerationRaw, true);
-
-            currentParameterName = "EnumValueNaming";
-            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var enumValueNamingRaw);
-            configuration.EnumValueNaming =
-                String.IsNullOrWhiteSpace(enumValueNamingRaw)
-                    ? EnumValueNamingOption.CSharp
-                    : (EnumValueNamingOption)Enum.Parse(typeof(EnumValueNamingOption), enumValueNamingRaw, true);
-
-            currentParameterName = "CustomClassMapping";
-            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var customClassMappingRaw);
+            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey("CustomClassMapping"), out var customClassMappingRaw);
             if (!KeyValueParameterParser.TryGetCustomClassMapping(
-                    customClassMappingRaw?.Split(new[] { '|', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries),
+                    customClassMappingRaw?.Split(['|', ';', ' '], StringSplitOptions.RemoveEmptyEntries),
                     out var customMapping,
                     out var customMappingParsingErrorMessage))
             {
@@ -175,10 +144,9 @@ public class GraphQlClientSourceGenerator : ISourceGenerator
             foreach (var kvp in customMapping)
                 configuration.CustomClassNameMapping.Add(kvp);
 
-            currentParameterName = "Headers";
-            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var headersRaw);
+            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey("Headers"), out var headersRaw);
             if (!KeyValueParameterParser.TryGetCustomHeaders(
-                    headersRaw?.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries),
+                    headersRaw?.Split(['|'], StringSplitOptions.RemoveEmptyEntries),
                     out var headers,
                     out var headerParsingErrorMessage))
             {
@@ -186,8 +154,7 @@ public class GraphQlClientSourceGenerator : ISourceGenerator
                 return;
             }
 
-            currentParameterName = "ScalarFieldTypeMappingProvider";
-            if (context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var scalarFieldTypeMappingProviderName))
+            if (context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey("ScalarFieldTypeMappingProvider"), out var scalarFieldTypeMappingProviderName))
             {
                 if (regexScalarFieldTypeMappingProviderRules is not null)
                 {
@@ -225,7 +192,16 @@ public class GraphQlClientSourceGenerator : ISourceGenerator
             }
             else
             {
-                graphQlSchemas.Add((FileNameGraphQlClientSource, GraphQlGenerator.RetrieveSchema(new HttpMethod(httpMethod), serviceUrl, headers).GetAwaiter().GetResult()));
+                using var httpClientHandler = GraphQlGenerator.CreateDefaultHttpClientHandler();
+                var ignoreServiceUrlCertificateErrors =
+                    context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey("IgnoreServiceUrlCertificateErrors"), out var ignoreServiceUrlCertificateErrorsRaw) &&
+                    !String.IsNullOrWhiteSpace(ignoreServiceUrlCertificateErrorsRaw) && Convert.ToBoolean(ignoreServiceUrlCertificateErrorsRaw);
+
+                if (ignoreServiceUrlCertificateErrors)
+                    httpClientHandler.ServerCertificateCustomValidationCallback = (_, _, _, _) => true;
+
+                var graphQlSchema = GraphQlGenerator.RetrieveSchema(new HttpMethod(httpMethod), serviceUrl, headers, httpClientHandler).GetAwaiter().GetResult();
+                graphQlSchemas.Add((FileNameGraphQlClientSource, graphQlSchema));
                 context.ReportDiagnostic(
                     Diagnostic.Create(
                         DescriptorInfo,
@@ -233,16 +209,8 @@ public class GraphQlClientSourceGenerator : ISourceGenerator
                         $"GraphQl schema fetched successfully from {serviceUrl}"));
             }
 
-            currentParameterName = "FileScopedNamespaces";
-            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var fileScopedNamespacesRaw);
+            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey("FileScopedNamespaces"), out var fileScopedNamespacesRaw);
             configuration.FileScopedNamespaces = !String.IsNullOrWhiteSpace(fileScopedNamespacesRaw) && Convert.ToBoolean(fileScopedNamespacesRaw);
-
-            currentParameterName = "OutputType";
-            context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(currentParameterName), out var outputTypeRaw);
-            var outputType =
-                String.IsNullOrWhiteSpace(outputTypeRaw)
-                    ? OutputType.SingleFile
-                    : (OutputType)Enum.Parse(typeof(OutputType), outputTypeRaw, true);
 
             var generator = new GraphQlGenerator(configuration);
 
@@ -252,13 +220,13 @@ public class GraphQlClientSourceGenerator : ISourceGenerator
                 {
                     var builder = new StringBuilder();
                     using (var writer = new StringWriter(builder))
-                        generator.WriteFullClientCSharpFile(schema, @namespace, writer);
+                        generator.WriteFullClientCSharpFile(schema, writer);
 
                     context.AddSource(targetFileName, SourceText.From(builder.ToString(), Encoding.UTF8));
                 }
                 else
                 {
-                    var multipleFileGenerationContext = new MultipleFileGenerationContext(schema, new SourceGeneratorFileEmitter(context), @namespace);
+                    var multipleFileGenerationContext = new MultipleFileGenerationContext(schema, new SourceGeneratorFileEmitter(context));
                     generator.Generate(multipleFileGenerationContext);
                 }
             }
@@ -273,6 +241,21 @@ public class GraphQlClientSourceGenerator : ISourceGenerator
         {
             context.ReportDiagnostic(Diagnostic.Create(DescriptorGenerationError, Location.None, exception.Message));
         }
+    }
+
+    private static void SetConfigurationEnumValue<TEnum>(
+        GeneratorExecutionContext context,
+        string parameterName,
+        TEnum defaultValue,
+        Action<TEnum> valueSetter) where TEnum : Enum
+    {
+        context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(BuildPropertyKey(parameterName), out var enumStringValue);
+        var value =
+            String.IsNullOrWhiteSpace(enumStringValue)
+                ? defaultValue
+                : (TEnum)Enum.Parse(typeof(TEnum), enumStringValue, true);
+
+        valueSetter(value);
     }
 
     private static string BuildPropertyKey(string parameterName) => $"{BuildPropertyKeyPrefix}{parameterName}";

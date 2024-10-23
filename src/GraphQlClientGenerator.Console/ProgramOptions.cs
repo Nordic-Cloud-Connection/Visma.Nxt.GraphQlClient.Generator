@@ -5,6 +5,7 @@ public class ProgramOptions
     public string OutputPath { get; set; }
     public string Namespace { get; set; }
     public bool FileScopedNamespaces { get; set; }
+    public bool IgnoreServiceUrlCertificateErrors { get; set; }
     public string ServiceUrl { get; set; }
     public string SchemaFileName { get; set; }
     public string HttpMethod { get; set; }
@@ -12,6 +13,7 @@ public class ProgramOptions
     public string ClassPrefix { get; set; }
     public string ClassSuffix { get; set; }
     public CSharpVersion CSharpVersion { get; set; }
+    public CodeDocumentationType CodeDocumentationType { get; set; }
     public MemberAccessibility MemberAccessibility { get; set; }
     public OutputType OutputType { get; set; }
     public bool PartialClasses { get; set; }
@@ -24,5 +26,6 @@ public class ProgramOptions
     public JsonPropertyGenerationOption JsonPropertyAttribute { get; set; }
     public EnumValueNamingOption EnumValueNaming { get; set; }
     public DataClassMemberNullability DataClassMemberNullability { get; set; }
+    public GenerationOrder GenerationOrder { get; set; }
     public bool IncludeDeprecatedFields { get; set; }
 }

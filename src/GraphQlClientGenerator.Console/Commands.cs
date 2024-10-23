@@ -9,13 +9,13 @@ internal static class Commands
 
     private static RootCommand SetupGenerateCommand()
     {
-        var serviceUrlOption = new Option<string>(new[] { "--serviceUrl", "-u" }, "GraphQL service URL used for retrieving schema metadata");
-        var schemaFileOption = new Option<string>(new[] { "--schemaFileName", "-s" }, "Path to schema metadata file in JSON format");
+        var serviceUrlOption = new Option<string>(["--serviceUrl", "-u"], "GraphQL service URL used for retrieving schema metadata");
+        var schemaFileOption = new Option<string>(["--schemaFileName", "-s"], "Path to schema metadata file in JSON format");
 
         var classMappingOption =
             new Option<string[]>(
                 "--classMapping",
-                "Format: {GraphQlTypeName}:{C#ClassName}; allows to define custom class names for specific GraphQL types; common reason for this is to avoid property of the same name as its parent class");
+                "Format: {GraphQlTypeName}:{C#ClassName}; allows to define custom class names for specific GraphQL types");
 
         classMappingOption.AddValidator(
             static option =>
@@ -38,8 +38,8 @@ internal static class Commands
         var command =
             new RootCommand
             {
-                new Option<string>(new[] { "--outputPath", "-o" }, "Output path; include file name for single file output type; folder name for one class per file output type") { IsRequired = true },
-                new Option<string>(new[] { "--namespace", "-n" }, "Root namespace all classes and other members are generated to") { IsRequired = true },
+                new Option<string>(["--outputPath", "-o"], "Output path; include file name for single file output type; folder name for one class per file output type") { IsRequired = true },
+                new Option<string>(["--namespace", "-n"], "Root namespace all classes and other members are generated into") { IsRequired = true },
                 serviceUrlOption,
                 schemaFileOption,
                 new Option<string>("--httpMethod", () => "POST", "GraphQL schema metadata retrieval HTTP method"),
@@ -47,19 +47,22 @@ internal static class Commands
                 new Option<string>("--classPrefix", "Class prefix; value \"Test\" extends class name to \"TestTypeName\""),
                 new Option<string>("--classSuffix", "Class suffix, for instance for version control; value \"V2\" extends class name to \"TypeNameV2\""),
                 new Option<CSharpVersion>("--csharpVersion", () => CSharpVersion.Compatible, "C# version compatibility"),
+                new Option<CodeDocumentationType>("--codeDocumentationType", () => CodeDocumentationType.Disabled, "Specifies code documentation generation option"),
                 new Option<MemberAccessibility>("--memberAccessibility", () => MemberAccessibility.Public, "Class and interface access level"),
                 new Option<OutputType>("--outputType", () => OutputType.SingleFile, "Specifies generated classes organization"),
                 new Option<bool>("--partialClasses", () => false, "Mark classes as \"partial\""),
                 classMappingOption,
-                new Option<BooleanTypeMapping>("--booleanTypeMapping", () => BooleanTypeMapping.Boolean, "Specifies the .NET type generated for GraphQL Boolean data type"),
-                new Option<FloatTypeMapping>("--floatTypeMapping", () => FloatTypeMapping.Decimal, "Specifies the .NET type generated for GraphQL Float data type"),
-                new Option<IdTypeMapping>("--idTypeMapping", () => IdTypeMapping.Guid, "Specifies the .NET type generated for GraphQL ID data type"),
-                new Option<IntegerTypeMapping>("--integerTypeMapping", () => IntegerTypeMapping.Int32, "Specifies the .NET type generated for GraphQL Integer data type"),
+                new Option<BooleanTypeMapping>("--booleanTypeMapping", () => BooleanTypeMapping.Boolean, "Specifies the .NET type generated for GraphQL built-in Boolean data type"),
+                new Option<FloatTypeMapping>("--floatTypeMapping", () => FloatTypeMapping.Decimal, "Specifies the .NET type generated for GraphQL built-in Float data type"),
+                new Option<IdTypeMapping>("--idTypeMapping", () => IdTypeMapping.Guid, "Specifies the .NET type generated for GraphQL built-in ID data type"),
+                new Option<IntegerTypeMapping>("--integerTypeMapping", () => IntegerTypeMapping.Int32, "Specifies the .NET type generated for GraphQL built-in Integer data type"),
                 new Option<JsonPropertyGenerationOption>("--jsonPropertyAttribute", () => JsonPropertyGenerationOption.CaseInsensitive, "Specifies the condition for using \"JsonPropertyAttribute\""),
                 new Option<EnumValueNamingOption>("--enumValueNaming", () => EnumValueNamingOption.CSharp, "Use \"Original\" to avoid pretty C# name conversion for maximum deserialization compatibility"),
                 new Option<DataClassMemberNullability>("--dataClassMemberNullability", () => DataClassMemberNullability.AlwaysNullable, "Specifies whether data class scalar properties generated always nullable (for better type reuse) or respect the GraphQL schema"),
+                new Option<GenerationOrder>("--generationOrder", () => GenerationOrder.DefinedBySchema, "Specifies whether order of generated C# classes/enums respect the GraphQL schema or is enforced to alphabetical for easier change tracking"),
                 new Option<bool>("--includeDeprecatedFields", () => false, "Includes deprecated fields in generated query builders and data classes"),
                 new Option<bool>("--fileScopedNamespaces", () => false, "Specifies if file-scoped namespaces should be used in generated files (C# 10+)"),
+                new Option<bool>("--ignoreServiceUrlCertificateErrors", () => false, "Ignores HTTPS errors when retrieving GraphQL metadata from an URL; typically when using self signed certificates"),
                 regexScalarFieldTypeMappingConfigurationOption
             };
 
@@ -84,13 +87,13 @@ internal static class Commands
         command.AddValidator(
             option =>
             {
-                var result = option.FindResultFor(regexScalarFieldTypeMappingConfigurationOption);
-                if (result is null)
+                var regexScalarFieldTypeMappingConfigurationFileName = option.FindResultFor(regexScalarFieldTypeMappingConfigurationOption)?.GetValueOrDefault<string>();
+                if (regexScalarFieldTypeMappingConfigurationFileName is null)
                     return;
 
                 try
                 {
-                    RegexScalarFieldTypeMappingProvider.ParseRulesFromJson(File.ReadAllText(result.GetValueOrDefault<string>()));
+                    RegexScalarFieldTypeMappingProvider.ParseRulesFromJson(File.ReadAllText(regexScalarFieldTypeMappingConfigurationFileName));
                 }
                 catch (Exception exception)
                 {

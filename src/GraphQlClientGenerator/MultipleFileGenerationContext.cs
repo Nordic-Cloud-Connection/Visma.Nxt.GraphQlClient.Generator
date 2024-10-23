@@ -32,33 +32,24 @@ public class MultipleFileGenerationContext : GenerationContext
 
         """;
 
-    private readonly List<CodeFileInfo> _files = new();
-
     private readonly ICodeFileEmitter _codeFileEmitter;
-    private readonly string _namespace;
     private readonly string _projectFileName;
 
     private CodeFile _currentFile;
 
-    protected internal override TextWriter Writer => _currentFile.Writer;
+    protected internal override TextWriter Writer =>
+        (_currentFile ?? throw new InvalidOperationException($"\"{nameof(Writer)}\" not initialized")).Writer;
 
-    public override byte Indentation => (byte)(Configuration.FileScopedNamespaces ? 0 : 4);
-
-    public IReadOnlyCollection<CodeFileInfo> Files => _files;
+    public override byte IndentationSize => (byte)(Configuration.FileScopedNamespaces ? 0 : 4);
 
     public MultipleFileGenerationContext(
         GraphQlSchema schema,
         ICodeFileEmitter codeFileEmitter,
-        string @namespace,
         string projectFileName = null,
         GeneratedObjectType objectTypes = GeneratedObjectType.All)
         : base(schema, objectTypes)
     {
-        if (String.IsNullOrWhiteSpace(@namespace))
-            throw new ArgumentException("namespace required", nameof(@namespace));
-
         _codeFileEmitter = codeFileEmitter ?? throw new ArgumentNullException(nameof(codeFileEmitter));
-        _namespace = @namespace;
 
         if (projectFileName is not null && !projectFileName.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Project file name must end with .csproj.", nameof(projectFileName));
@@ -66,7 +57,9 @@ public class MultipleFileGenerationContext : GenerationContext
         _projectFileName = projectFileName;
     }
 
-    public override void BeforeGeneration() => _files.Clear();
+    public override void BeforeGeneration()
+    {
+    }
 
     public override void BeforeBaseClassGeneration() => InitializeNewSourceCodeFile("BaseClasses", GraphQlGenerator.RequiredNamespaces);
 
@@ -126,9 +119,21 @@ public class MultipleFileGenerationContext : GenerationContext
 
     public override void BeforeDataClassGeneration(ObjectGenerationContext context) => InitializeNewSourceCodeFile(context.CSharpTypeName);
 
+    public override void OnDataClassConstructorGeneration(ObjectGenerationContext context)
+    {
+    }
+
     public override void AfterDataClassGeneration(ObjectGenerationContext context) => WriteNamespaceEnd();
 
     public override void AfterDataClassesGeneration()
+    {
+    }
+
+    public override void BeforeDataPropertyGeneration(PropertyGenerationContext context)
+    {
+    }
+
+    public override void AfterDataPropertyGeneration(PropertyGenerationContext context)
     {
     }
 
@@ -141,7 +146,7 @@ public class MultipleFileGenerationContext : GenerationContext
 
         var projectFile = _codeFileEmitter.CreateFile(_projectFileName);
         projectFile.Writer.Write(ProjectTemplate);
-        _files.Add(_codeFileEmitter.CollectFileInfo(projectFile));
+        LogFileCreation(_codeFileEmitter.CollectFileInfo(projectFile));
     }
 
     private void InitializeNewSourceCodeFile(string memberName, string requiredNamespaces = RequiredNamespaces)
@@ -155,7 +160,7 @@ public class MultipleFileGenerationContext : GenerationContext
         writer.WriteLine();
         writer.WriteLine(requiredNamespaces);
         writer.Write("namespace ");
-        writer.Write(_namespace);
+        writer.Write(Configuration.TargetNamespace);
 
         if (Configuration.FileScopedNamespaces)
         {
@@ -174,10 +179,13 @@ public class MultipleFileGenerationContext : GenerationContext
     private void CollectCurrentFile()
     {
         if (_currentFile is not null)
-            _files.Add(_codeFileEmitter.CollectFileInfo(_currentFile));
+            LogFileCreation(_codeFileEmitter.CollectFileInfo(_currentFile));
 
         _currentFile = null;
     }
+
+    private void LogFileCreation(CodeFileInfo fileInfo) =>
+        Log($"File {fileInfo.FileName} generated successfully ({fileInfo.Length:N0} B). ");
 }
 
 public class FileSystemEmitter : ICodeFileEmitter
