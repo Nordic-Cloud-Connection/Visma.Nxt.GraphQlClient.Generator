@@ -1,3 +1,7 @@
+Important for CC fork
+=====================
+Master branch uses tags to mark time points for when new changes have been pulled from the upstream.
+
 GraphQL C# client generator
 =======================
 
