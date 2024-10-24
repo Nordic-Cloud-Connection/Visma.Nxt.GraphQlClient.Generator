@@ -22,7 +22,7 @@ internal class Program
         var generator = new GraphQlGenerator(config);
         var projectfi = new FileInfo(Path.Combine(OutputDirectory, $"{GeneratedAssemblyName}.csproj"));
         var emitter = new FileSystemEmitter(projectfi.DirectoryName);
-        var context = new MultipleFileGenerationContext(schema, emitter, projectfi.Name, GeneratedObjectType.BaseClasses)
+        var context = new MultipleFileGenerationContext(schema, emitter, projectfi.Name, GeneratedObjectType.BaseClasses | GeneratedObjectType.DataClasses)
         {
             LogMessage = Console.WriteLine,
         };
