@@ -1,3 +1,6 @@
+// Define this to generate from an on-disk schema after the first download.
+// CHECK THE PATH AT THE LOCATION IN THE CODE!  THE FILE IS UNCONDITIONALLY OVERWRITTEN!
+// #define SAVE_DOWNLOADED_SCHEMA_TO_FILE
 using System.Net;
 using System.Net.Http.Headers;
 using System.Reflection;
@@ -92,6 +95,11 @@ public class GraphQlGenerator(GraphQlGeneratorConfiguration configuration = null
 
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException($"Status code: {(int)response.StatusCode} ({response.StatusCode}); content: {content}");
+
+#if SAVE_DOWNLOADED_SCHEMA_TO_FILE
+        const string Path = @"E:\VismaGqlSchema.json";
+        File.WriteAllText(Path, content);
+#endif
 
         return DeserializeGraphQlSchema(content);
     }

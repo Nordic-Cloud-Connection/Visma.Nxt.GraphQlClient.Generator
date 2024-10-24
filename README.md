@@ -14,6 +14,9 @@ GraphQlClientGenerator.Console.exe -o generated -n VbNxtClient -u https://busine
 
 The token can be easily obtained from GraphiQL and developer tools.
 
+`GraphQlGenerator.cs` is patched to allow saving the downloaded schema to disk so that later runs can be
+performed offline.
+
 GraphQL C# client generator
 =======================
 
