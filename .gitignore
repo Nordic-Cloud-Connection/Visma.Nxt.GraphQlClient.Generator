@@ -136,3 +136,4 @@ tmpinst-dir.stamp
 msvc/scripts/inputs/
 extensions-config.h
 
+/src/GraphQlClientGenerator.Console/Properties/launchSettings.json

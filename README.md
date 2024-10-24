@@ -2,6 +2,18 @@ Important for CC fork
 =====================
 Master branch uses tags to mark time points for when new changes have been pulled from the upstream.
 
+To generate the classes, use the following command:
+
+```console
+GraphQlClientGenerator.Console.exe -o generated -n VbNxtClient -u https://business.visma.net/api/graphql/
+  --outputType OneClassPerFile
+  --codeDocumentationType DescriptionAttribute
+  --fileScopedNamespaces
+  --header "Authorization:Bearer <REDACTED>"
+```
+
+The token can be easily obtained from GraphiQL and developer tools.
+
 GraphQL C# client generator
 =======================
 
