@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace GraphQlClientGenerator;
 
-internal static class NamingHelper
+public static class NamingHelper
 {
     internal const string MetadataFieldTypeName = "__typename";
 

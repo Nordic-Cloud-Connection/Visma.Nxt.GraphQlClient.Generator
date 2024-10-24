@@ -10,14 +10,17 @@ internal class Program
 
     static void Main(string[] args)
     {
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+
         var schema = GraphQlGenerator.DeserializeGraphQlSchema(File.ReadAllText(InputPath));
         var config = new GraphQlGeneratorConfiguration()
         {
             TargetNamespace = GeneratedAssemblyName,
-            CSharpVersion = CSharpVersion.Newest,
+            CSharpVersion = CSharpVersion.NewestWithNullableReferences,
             CodeDocumentationType = CodeDocumentationType.DescriptionAttribute,
             TreatUnknownObjectAsScalar = true,
             FileScopedNamespaces = true,
+            ScalarFieldTypeMappingProvider = new VismaTypeMappingProvider(),
         };
         var generator = new GraphQlGenerator(config);
         var projectfi = new FileInfo(Path.Combine(OutputDirectory, $"{GeneratedAssemblyName}.csproj"));
