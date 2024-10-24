@@ -18,8 +18,8 @@ internal class VismaTypeMappingProvider : IScalarFieldTypeMappingProvider
         string valueName
         )
     {
-        if (valueName == "Aggregates")
-            Debugger.Break();
+        valueType = (valueType as GraphQlFieldType)?.UnwrapIfNonNull() ?? valueType;
+
         if (valueType.Kind == GraphQlTypeKind.Enum)
             return new ScalarFieldTypeDescription { NetTypeName =
                 $"{configuration.ClassPrefix}{NamingHelper.ToPascalCase(valueType.Name)}{configuration.ClassSuffix}?"
